@@ -10,6 +10,8 @@ class Shard implements \Iterator {
   private $_filename;
   private $_fp = null;
 
+  private $_fileWasJustCreated = false;
+
   private $_y;
   private $_m;
   private $_d;
@@ -45,14 +47,15 @@ class Shard implements \Iterator {
     // create the file if it doesn't exist when in "write" mode
     if($this->_db->mode == 'w' && !$this->exists()) {
       touch($this->_filename);
+      $this->_fileWasJustCreated = true;
     }
 
     // open the file pointer
-    if($this->exists()) {
+    if($this->exists()) {      
       // Set the fopen mode to read or write
-      $mode = $this->_db->mode == 'w' ? 'a' : 'r';
-      $this->_fp = new SplFileObject($this->_filename);
-      $this->_fp->openFile($mode);
+      $mode = ($this->_db->mode == 'w' ? 'a' : 'r');
+      $file = new SplFileObject($this->_filename);
+      $this->_fp = $file->openFile($mode);
     }
   }
 
@@ -86,8 +89,15 @@ class Shard implements \Iterator {
     $line = $date->format('Y-m-d H:i:s.').$date->format('u');
     $line .= ' ' . json_encode($data);
 
+    if($this->_fileWasJustCreated) {
+      $this->_fileWasJustCreated = false;
+      $newline = '';
+    } else {
+      $newline = "\n";
+    }
+
     // append the line to the file
-    $this->_fp->fwrite($line."\n");
+    $this->_fp->fwrite($newline.$line);
   }
 
   // Iterator Interface
