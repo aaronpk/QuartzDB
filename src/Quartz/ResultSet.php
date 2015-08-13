@@ -28,7 +28,11 @@ class ResultSet implements \Iterator {
     foreach($period as $dt) {
       $shard = new Shard($db, $dt->format('Y'), $dt->format('m'), $dt->format('d'));
       if($shard->exists()) {
-        $shard->setQueryRange($from, $to);
+        // Only set the query range if it overlaps this shard
+        if($from->format('Y-m-d') == $dt->format('Y-m-d')
+          || $to->format('Y-m-d') == $dt->format('Y-m-d')) {
+          $shard->setQueryRange($from, $to);
+        }
         $this->_shards[] = $shard;
         $shardDates[] = $dt->format('Y-m-d');
       }
@@ -55,24 +59,20 @@ class ResultSet implements \Iterator {
   // Iterator Interface
 
   public function current() {
-    echo __METHOD__."\n";
     return $this->currentShard()->current();
   }
 
   public function key() {
-    echo __METHOD__."\n";
     return $this->currentShard()->key();
   }
 
   public function next() {
-    echo __METHOD__."\n";
     // Always just run next() on the current shard, which means we 
     // won't know if that shard has a valid record until it's checked with valid()
     return $this->currentShard()->next();
   }
 
   public function valid() {
-    echo __METHOD__."\n";
     $currentValid = $this->currentShard()->valid();
     if($currentValid) {
       return $currentValid;
@@ -90,7 +90,6 @@ class ResultSet implements \Iterator {
   }
 
   public function rewind() {
-    echo __METHOD__."\n";
     $this->_shardIndex = 0;
     $this->currentShard()->init();
     return $this->currentShard()->rewind();

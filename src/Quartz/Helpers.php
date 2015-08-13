@@ -36,5 +36,12 @@ trait Helpers {
     }
   }
 
+  private static function date_cmp($a, $b) {
+    // if $d1 and $d2 are DateTime objects with microsecond precision, $d1 < $d2 
+    // does not take in to account the microseconds when comparing. This is a workaround.
+    $a = $a->format('U')*1000000 + $a->format('u');
+    $b = $b->format('U')*1000000 + $b->format('u');
+    return $a < $b;
+  }
 
 }

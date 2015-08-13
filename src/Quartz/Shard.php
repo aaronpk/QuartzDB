@@ -1,7 +1,7 @@
 <?php
 namespace Quartz;
 
-use SplFileObject;
+use SplFileObject, DateTime;
 
 class Shard implements \Iterator {
 
@@ -104,8 +104,13 @@ class Shard implements \Iterator {
   // Iterator Interface
   // Mostly pass-through to the SplFileObject
 
+  private $_current;
+
   public function current() {
-    $line = $this->_fp->current();
+    if($this->_current)
+      $line = $this->_current;
+    else
+      $line = $this->_fp->current();
 
     $date = substr($line, 0, 26);
     $data = substr($line, 27);
@@ -123,7 +128,32 @@ class Shard implements \Iterator {
   }
 
   public function valid() {
-    return $this->_fp->valid();
+    if($this->_queryFrom || $this->_queryTo) {
+      // Check if the current line is within the range of the query
+      $line = $this->_current = $this->_fp->current();
+      $date = substr($line, 0, 26);
+      $date = new DateTime($date);
+
+      if($this->_queryFrom
+        && self::date_cmp($date, $this->_queryFrom)) {
+        // Seek to the first line that is within the range
+        do {
+          $this->_fp->next();
+          $line = $this->_current = $this->_fp->current();
+          $date = substr($line, 0, 26);
+          $date = new DateTime($date);
+        } while($this->_fp->valid() && self::date_cmp($date, $this->_queryFrom));
+      }
+
+      if($this->_queryTo
+        && !self::date_cmp($date, $this->_queryTo)) {
+        return false;
+      }
+
+      return $this->_fp->valid();
+    } else {
+      return $this->_fp->valid();
+    }
   }
 
   public function rewind() {
