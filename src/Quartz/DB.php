@@ -31,9 +31,11 @@ class DB {
 
     $date = self::date($date);
     $shard = $this->shardForDate($date);
+
     if(!$shard->isOpen())
       $shard->init();
-    $shard->add($date, $data);
+
+    return $shard->add($date, $data);
   }
 
   public function queryRange($from, $to) {

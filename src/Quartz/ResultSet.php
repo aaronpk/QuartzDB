@@ -59,20 +59,32 @@ class ResultSet implements \Iterator {
   // Iterator Interface
 
   public function current() {
+    if(!$this->currentShard())
+      return null;
+
     return $this->currentShard()->current();
   }
 
   public function key() {
+    if(!$this->currentShard())
+      return null;
+
     return $this->currentShard()->key();
   }
 
   public function next() {
+    if(!$this->currentShard())
+      return false;
+
     // Always just run next() on the current shard, which means we 
     // won't know if that shard has a valid record until it's checked with valid()
     return $this->currentShard()->next();
   }
 
   public function valid() {
+    if(!$this->currentShard())
+      return false;
+
     $currentValid = $this->currentShard()->valid();
     if($currentValid) {
       return $currentValid;
@@ -91,8 +103,10 @@ class ResultSet implements \Iterator {
 
   public function rewind() {
     $this->_shardIndex = 0;
-    $this->currentShard()->init();
-    return $this->currentShard()->rewind();
+    if($this->currentShard()) {
+      $this->currentShard()->init();
+      return $this->currentShard()->rewind();
+    }
   }
 
 }
