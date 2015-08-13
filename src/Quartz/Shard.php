@@ -1,0 +1,121 @@
+<?php
+namespace Quartz;
+
+use SplFileObject;
+
+class Shard implements \Iterator {
+
+  private $_db;
+  private $_path;
+  private $_filename;
+  private $_fp = null;
+
+  private $_y;
+  private $_m;
+  private $_d;
+
+  private $_queryFrom;
+  private $_queryTo;
+  private $_pos;
+
+  use Helpers;
+
+  public function __construct($db, $y, $m, $d) {
+    $this->_db = $db;
+    // get the path for this shard
+    $this->_path = $db->path . '/' . $y . '/' . $m . '/';
+    // get the filename for this shard
+    $this->_filename = $this->_path . $d . '.txt';
+
+    $this->_y = $y;
+    $this->_m = $m;
+    $this->_d = $d;
+  }
+
+  public function exists() {
+    return file_exists($this->_filename);
+  }
+
+  public function init() {
+    // create the folder if it doesn't exist
+    if($this->_db->mode == 'w' && !file_exists($this->_path)) {
+      mkdir($this->_path, 0755, true);
+    }
+
+    // create the file if it doesn't exist when in "write" mode
+    if($this->_db->mode == 'w' && !$this->exists()) {
+      touch($this->_filename);
+    }
+
+    // open the file pointer
+    if($this->exists()) {
+      // Set the fopen mode to read or write
+      $mode = $this->_db->mode == 'w' ? 'a' : 'r';
+      $this->_fp = new SplFileObject($this->_filename);
+      $this->_fp->openFile($mode);
+    }
+  }
+
+  public function isOpen() {
+    return $this->_fp != null;
+  }
+
+  public function close() {
+    $this->_fp = null;
+  }
+
+  public function setQueryRange($from, $to) {
+    $from = self::date($from);
+    $to = self::date($to);
+
+    $this->_queryFrom = $from;
+    $this->_queryTo = $to;
+  }
+
+  public function add($date, $data) {
+    if(!is_object($date) || get_class($date) != 'DateTime') {
+      throw new Exception('Date parameter passed to shard->add() was not a DateTime object: '.get_class($date));
+    }
+    // validate the given date is contained in this shard
+    $shardDate = $this->_y.'-'.$this->_m.'-'.$this->_d;
+    if($date->format('Y-m-d') != $shardDate) {
+      throw new Exception('Attempted to add to a shard with the wrong date. Input:'.$date->format('Y-m-d') . ' Shard:'.$shardDate);
+    }
+
+    // format the line
+    $line = $date->format('Y-m-d H:i:s.').$date->format('u');
+    $line .= ' ' . json_encode($data);
+
+    // append the line to the file
+    $this->_fp->fwrite($line."\n");
+  }
+
+  // Iterator Interface
+  // Mostly pass-through to the SplFileObject
+
+  public function current() {
+    $line = $this->_fp->current();
+
+    $date = substr($line, 0, 26);
+    $data = substr($line, 27);
+
+    return Record::createFromLine($this->key(), $date, $data);
+  }
+
+  public function key() {
+    $line = $this->_fp->key();
+    return $this->_y.$this->_m.$this->_d.$line;
+  }
+
+  public function next() {
+    return $this->_fp->next();
+  }
+
+  public function valid() {
+    return $this->_fp->valid();
+  }
+
+  public function rewind() {
+    return $this->_fp->rewind();
+  }
+}
