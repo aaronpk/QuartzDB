@@ -100,6 +100,7 @@ class Shard implements \Iterator {
     $this->_fp->fwrite($newline.$line);
   }
 
+  ////////////////////////////////////////////////////////////
   // Iterator Interface
   // Mostly pass-through to the SplFileObject
 

@@ -47,8 +47,7 @@ class DB {
       throw new Exception('From must be an earlier date than To');
     }
 
-    $results = new ResultSet($this, $from, $to);
-    return $results;
+    return new ResultSet($this, $from, $to);
   }
 
   public function getByDate($date) {

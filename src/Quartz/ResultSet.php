@@ -8,14 +8,14 @@ class ResultSet implements \Iterator {
   private $_db;
   private $_from;
   private $_to;
-  private $_shards = [];
+  public $_shards = [];
 
-  private $_shardPos;
+  private $_shardIndex;
 
   use Helpers;
 
   public function __construct($db, $from, $to) {
-    $this->_shardPos = 0;
+    $this->_shardIndex = 0;
     $this->_db = $db;
     $this->_from = $from;
     $this->_to = $to;
@@ -23,43 +23,77 @@ class ResultSet implements \Iterator {
     // add all the shards to the array if they exist
     $interval = DateInterval::createFromDateString('1 day');
     $period = new DatePeriod($from, $interval, $to);
+
+    $shardDates = [];
     foreach($period as $dt) {
       $shard = new Shard($db, $dt->format('Y'), $dt->format('m'), $dt->format('d'));
-      if($shard->exists())
+      if($shard->exists()) {
+        $shard->setQueryRange($from, $to);
         $this->_shards[] = $shard;
+        $shardDates[] = $dt->format('Y-m-d');
+      }
     }
-  }
-
-  public function current() {
-    var_dump(__METHOD__);
-    $this->_shards[$this->_shardPos]->current();
-  }
-
-  public function key() {
-    var_dump(__METHOD__);
-    $this->_shards[$this->_shardPos]->key();
-  }
-
-  public function next() {
-    var_dump(__METHOD__);
-    $nextInShard = $this->_shards[$this->_shardPos]->next();
-    if($nextInShard === false) {
-      $this->_shardPos++;
-      if($this->_shardPos) {
-
+    // The last shard may not have been reached by the iterator, for example if 
+    // the from timestamp starts at 17:00 and the end timestamp is 10:00
+    if(!in_array($to->format('Y-m-d'), $shardDates)) {
+      $shard = new Shard($db, $to->format('Y'), $to->format('m'), $to->format('d'));
+      if($shard->exists()) {
+        $shard->setQueryRange($from, $to);
+        $this->_shards[] = $shard;
       }
     }
   }
 
-  public function valid() {
-    var_dump(__METHOD__);
+  private function currentShard() {
+    if(array_key_exists($this->_shardIndex, $this->_shards))
+      return $this->_shards[$this->_shardIndex];
+    else
+      return null;
+  }
 
+  ////////////////////////////////////////////////////////////
+  // Iterator Interface
+
+  public function current() {
+    echo __METHOD__."\n";
+    return $this->currentShard()->current();
+  }
+
+  public function key() {
+    echo __METHOD__."\n";
+    return $this->currentShard()->key();
+  }
+
+  public function next() {
+    echo __METHOD__."\n";
+    // Always just run next() on the current shard, which means we 
+    // won't know if that shard has a valid record until it's checked with valid()
+    return $this->currentShard()->next();
+  }
+
+  public function valid() {
+    echo __METHOD__."\n";
+    $currentValid = $this->currentShard()->valid();
+    if($currentValid) {
+      return $currentValid;
+    } else {
+      // Check the next shard
+      $this->_shardIndex++;
+      if($this->currentShard()) {
+        $this->currentShard()->init();
+        $this->currentShard()->rewind();
+        return $this->currentShard()->valid();
+      } else {
+        return false;
+      }
+    }
   }
 
   public function rewind() {
-    var_dump(__METHOD__);
-    $this->_shardPos = 0;
-
+    echo __METHOD__."\n";
+    $this->_shardIndex = 0;
+    $this->currentShard()->init();
+    return $this->currentShard()->rewind();
   }
 
 }
