@@ -100,6 +100,18 @@ class Shard implements \Iterator {
     $this->_fp->fwrite($newline.$line);
   }
 
+  public function sort() {
+    // Re-sort all the records in this file by date. Line numbers will change so
+    // the data will need to be re-indexed as well.
+    $lines = file($this->_filename, FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
+    usort($lines, function($a, $b){
+      $dateA = new DateTime(substr($a, 0, 26));
+      $dateB = new DateTime(substr($b, 0, 26));
+      return !self::date_cmp($dateA, $dateB);
+    });
+    file_put_contents($this->_filename, implode("\n", $lines));
+  }
+
   ////////////////////////////////////////////////////////////
   // Iterator Interface
   // Mostly pass-through to the SplFileObject

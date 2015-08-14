@@ -44,8 +44,8 @@ Range
 $results = $db->queryRange($fromDate, $toDate);
 // Loop through the result set.
 // The JSON is parsed when the row is accessed.
-foreach($results as $date=>$record) {
-  echo $date . ": " . $record->property . "\n";
+foreach($results as $id=>$record) {
+  echo $id . ": " . $record->property . "\n";
 }
 ```
 
@@ -53,21 +53,16 @@ Single Record
 
 ```php
 $db->getByDate($date);
-$db->getByID("YYYY-MM-DD-line");
+$db->getByID("YYYYMMDDline");
 ```
 
 ### Maintenance
 
 ```php
-// Re-sorts all the data in the shard by date
+// Re-sorts all the data in the shard by date.
+// This requires loading the entire file into memory.
 $shard = $db->getShard("YYYY","MM","DD");
 $shard->sort();
-$shard->save();
-
-// Updates the indexes for all entries this shard
-$shard = $db->getShard("YYYY","MM","DD");
-$shard->reindex();
-$shard->save();
 ```
 
 
@@ -83,12 +78,9 @@ The base path of the database contains a "data" folder and "index" folder.
      /2015/08/05.txt
      /2015/08/06.txt
      /2015/08/07.txt
-/index/
-     /index_name/2015/07.txt
-     /index_name/2015/08.txt
 ```
 
-Files contain one record per line, separated by newlines. The first 23 characters are
+Files contain one record per line, separated by newlines. The first 26 characters are
 the date with microsecond precision, followed by a space, followed by the JSON record.
 
 ```
@@ -98,6 +90,28 @@ the date with microsecond precision, followed by a space, followed by the JSON r
 ```
 
 Indexes
+-------
+
+Indexes are not yet implemented. Currently considering whether to implement a file-based index
+similar to the mechanism of storing the raw data, or whether to defer to a real
+database to handle the indexes.
+
+For example, using ElasticSearch, SQLite, Postgres, or MySQL to store the indexes 
+means being able to leverage a lot of existing work when searching and maintaining these
+indexes. 
+
+If indexes do end up being implemented here, they will probably work like this:
+
+Indexes would be stored as files on disk
+
+```
+/index/
+     /index_name/2015/07.txt
+     /index_name/2015/08.txt
+```
+
+The file would contain pointers to the file and line number of each record matching
+the index.
 
 ```
 {
@@ -108,5 +122,11 @@ Indexes
 }
 ```
 
-TODO: Consider using SQLite, Postgres, MySQL or Redis to store indexes instead.
+To update the indexes for all entries this shard:
+
+```
+$shard = $db->getShard("YYYY","MM","DD");
+$shard->reindex();
+$shard->save();
+```
 
