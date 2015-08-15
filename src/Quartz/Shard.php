@@ -21,6 +21,7 @@ class Shard implements \Iterator {
 
   private $_queryFrom;
   private $_queryTo;
+  private $_queryFromLine;
   private $_pos;
 
   use Helpers;
@@ -38,6 +39,13 @@ class Shard implements \Iterator {
     $this->_d = $d;
 
     $this->_date = new DateTime("$y-$m-$d", new DateTimeZone('UTC'));
+  }
+
+  public static function createFromDate($db, DateTime $date) {
+    $y = $date->format('Y');
+    $m = $date->format('m');
+    $d = $date->format('d');
+    return new Shard($db, $y, $m, $d);
   }
 
   public function exists() {
@@ -91,12 +99,22 @@ class Shard implements \Iterator {
     $this->_fp = null;
   }
 
+  public function count() {
+    $cur = $this->_mp->rewind();
+    $lines = $this->_mp->current();
+    return (int)$lines;
+  }
+
   public function setQueryRange($from, $to) {
     $from = self::date($from);
     $to = self::date($to);
 
     $this->_queryFrom = $from;
     $this->_queryTo = $to;
+  }
+
+  public function setQueryFromLine($line) {
+    $this->_queryFromLine = $line;
   }
 
   public function add($date, $data) {
@@ -176,6 +194,9 @@ class Shard implements \Iterator {
     else
       $line = $this->_fp->current();
 
+    if($line == '')
+      throw new Exception("Line was empty");
+      
     $date = substr($line, 0, 26);
     $data = substr($line, 27);
 
@@ -215,12 +236,25 @@ class Shard implements \Iterator {
       }
 
       return $this->_fp->valid();
+    } elseif($this->_queryFromLine) {
+      $valid = $this->_fp->valid();
+      return $valid;
     } else {
       return $this->_fp->valid();
     }
   }
 
   public function rewind() {
-    return $this->_fp->rewind();
+    if($this->_queryFromLine) {
+      // If querying starting with a line number, rewind should skip to that line.
+      $this->_fp->rewind();
+      // Because the last line doesn't have a newline, we actually have to seek
+      // to the line prior to the one we want, then run next, which sets up the 
+      // internal pointer properly so that valid() works.
+      $this->_fp->seek($this->_queryFromLine-1);
+      $this->_fp->next();
+    } else {
+      return $this->_fp->rewind();
+    }
   }
 }

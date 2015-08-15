@@ -25,6 +25,13 @@ class DB {
     }
   }
 
+  public static function UTC() {
+    static $utc;
+    if(!isset($utc))
+      $utc = new DateTimeZone('UTC');
+    return $utc;
+  }
+
   public function lastShardFile() {
     return $this->_path . '/lastshard.txt';
   }
@@ -53,7 +60,29 @@ class DB {
       throw new Exception('From must be an earlier date than To');
     }
 
-    return new ResultSet($this, $from, $to);
+    return ResultSet::createFromDateRange($this, $from, $to);
+  }
+
+  // TODO: Currently this only retrieves the last n records of the last shard.
+  // Ideally this would start seeking backwards in all the shards to fetch the
+  // actual last n records in the DB.
+  public function queryLast($n) {
+    if($this->_mode != 'r')
+      throw new Exception('This connection is write-only');
+
+    $lastShard = self::lastShard();
+
+    if(!$lastShard->isOpen())
+      $lastShard->init();
+
+    $lines = $lastShard->count();
+    $from = max($lines - $n, 0);
+
+    $resultSet = new ResultSet($this);
+    if($from > 0)
+      $lastShard->setQueryFromLine($from);
+    $resultSet->addShard($lastShard);
+    return $resultSet;
   }
 
   public function getByDate($date) {
@@ -96,6 +125,17 @@ class DB {
     if(!array_key_exists($key, $this->_shards)) {
       $shard = new Shard($this, $y, $m, $d);
       $this->_shards[$key] = $shard;
+    } else {
+      $shard = $this->_shards[$key];
+    }
+    return $shard;
+  }
+
+  public function lastShard() {
+    $key = file_get_contents($this->lastShardFile());
+    if(!array_key_exists($key, $this->_shards)) {
+      $date = new DateTime($key, self::UTC());
+      $shard = Shard::createFromDate($this, $date);
     } else {
       $shard = $this->_shards[$key];
     }

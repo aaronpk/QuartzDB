@@ -6,19 +6,19 @@ use DateInterval, DatePeriod;
 class ResultSet implements \Iterator {
 
   private $_db;
-  private $_from;
-  private $_to;
   public $_shards = [];
 
-  private $_shardIndex;
+  private $_shardIndex = 0;
 
   use Helpers;
 
-  public function __construct($db, $from, $to) {
+  public function __construct($db) {
     $this->_shardIndex = 0;
     $this->_db = $db;
-    $this->_from = $from;
-    $this->_to = $to;
+  }
+
+  public static function createFromDateRange($db, $from, $to) {
+    $resultSet = new ResultSet($db);
 
     // add all the shards to the array if they exist
     $interval = DateInterval::createFromDateString('1 day');
@@ -33,7 +33,7 @@ class ResultSet implements \Iterator {
           || $to->format('Y-m-d') == $dt->format('Y-m-d')) {
           $shard->setQueryRange($from, $to);
         }
-        $this->_shards[] = $shard;
+        $resultSet->_shards[] = $shard;
         $shardDates[] = $dt->format('Y-m-d');
       }
     }
@@ -43,9 +43,15 @@ class ResultSet implements \Iterator {
       $shard = new Shard($db, $to->format('Y'), $to->format('m'), $to->format('d'));
       if($shard->exists()) {
         $shard->setQueryRange($from, $to);
-        $this->_shards[] = $shard;
+        $resultSet->_shards[] = $shard;
       }
     }
+
+    return $resultSet;
+  }
+
+  public function addShard($shard) {
+    $this->_shards[] = $shard;
   }
 
   private function currentShard() {
