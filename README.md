@@ -76,8 +76,11 @@ The base path of the database contains a "data" folder and "index" folder.
 ```
 /data/
      /2015/08/05.txt
+     /2015/08/05.meta
      /2015/08/06.txt
+     /2015/08/06.meta
      /2015/08/07.txt
+     /2015/08/07.meta
 ```
 
 Files contain one record per line, separated by newlines. The first 26 characters are
@@ -88,6 +91,10 @@ the date with microsecond precision, followed by a space, followed by the JSON r
 2015-08-03 09:00:01.000000 {"foo":"bar","value":300}
 2015-08-03 09:00:02.000000 {"foo":"bar","value":300}
 ```
+
+The ".meta" files are for storing information about the data file. Currently the only
+thing in the meta file is line 1 contains the number of lines in the data file.
+
 
 Indexes
 -------

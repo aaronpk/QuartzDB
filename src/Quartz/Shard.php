@@ -8,7 +8,9 @@ class Shard implements \Iterator {
   private $_db;
   private $_path;
   private $_filename;
+  private $_metaFilename;
   private $_fp = null;
+  private $_mp = null;
 
   private $_fileWasJustCreated = false;
 
@@ -28,6 +30,7 @@ class Shard implements \Iterator {
     $this->_path = $db->path . '/' . $y . '/' . $m . '/';
     // get the filename for this shard
     $this->_filename = $this->_path . $d . '.txt';
+    $this->_metaFilename = $this->_path . $d . '.meta';
 
     $this->_y = $y;
     $this->_m = $m;
@@ -47,6 +50,7 @@ class Shard implements \Iterator {
     // create the file if it doesn't exist when in "write" mode
     if($this->_db->mode == 'w' && !$this->exists()) {
       touch($this->_filename);
+      touch($this->_metaFilename);
       $this->_fileWasJustCreated = true;
     }
 
@@ -56,6 +60,11 @@ class Shard implements \Iterator {
       $mode = ($this->_db->mode == 'w' ? 'a' : 'r');
       $file = new SplFileObject($this->_filename);
       $this->_fp = $file->openFile($mode);
+      $meta = new SplFileObject($this->_metaFilename);
+      $this->_mp = $meta->openFile('r+');
+      if($this->_fileWasJustCreated) {
+        $this->_mp->fwrite("0\n");
+      }
     }
   }
 
@@ -98,6 +107,14 @@ class Shard implements \Iterator {
 
     // append the line to the file
     $this->_fp->fwrite($newline.$line);
+
+    // update the meta file
+    $this->_mp->seek(0);
+    // TODO: cache the current value to avoid needing to read it each time
+    $cur = (int)trim($this->_mp->current());
+    $this->_mp->seek(0);
+    $this->_mp->fwrite(($cur+1)."\n");
+    $this->_mp->fflush();
   }
 
   public function getLine($line) {
