@@ -146,8 +146,10 @@ class Shard implements \Iterator {
     // TODO: cache the current value to avoid needing to read it each time
     $cur = (int)trim($this->_mp->current());
     $this->_mp->seek(0);
-    $this->_mp->fwrite(($cur+1)."\n");
+    $newcount = ($cur+1);
+    $this->_mp->fwrite($newcount."\n");
     $this->_mp->fflush();
+    return $newcount;
   }
 
   public function getLine($line) {
