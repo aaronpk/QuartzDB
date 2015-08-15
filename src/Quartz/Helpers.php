@@ -25,9 +25,13 @@ trait Helpers {
 
   private function date($input) {
     if(is_string($input)) {
-      $date = new DateTime($input);
-      $date->setTimeZone(new DateTimeZone('UTC'));
-      return $date;
+      try {
+        $date = new DateTime($input);
+        $date->setTimeZone(new DateTimeZone('UTC'));
+        return $date;
+      } catch(\Exception $e) {
+        throw new \Exception("Invalid date string");
+      }
     } elseif(is_object($input) && get_class($input) == 'DateTime') {
       $input->setTimeZone(new DateTimeZone('UTC'));
       return $input;
@@ -42,6 +46,13 @@ trait Helpers {
     $a = $a->format('U')*1000000 + $a->format('u');
     $b = $b->format('U')*1000000 + $b->format('u');
     return $a < $b;
+  }
+
+  public static function date_eq($a, $b) {
+    // Comparing DateTime objects with == does not take into account microseconds.
+    $a = $a->format('U')*1000000 + $a->format('u');
+    $b = $b->format('U')*1000000 + $b->format('u');
+    return $a == $b;
   }
 
 }

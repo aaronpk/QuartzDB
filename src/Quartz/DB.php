@@ -56,12 +56,35 @@ class DB {
     if($this->_mode != 'r')
       throw new Exception('This connection is write-only');
 
+    $date = self::date($date);
+
+    $shard = $this->shardForDate($date);
+
+    if(!$shard->exists())
+      return null;
+
+    if(!$shard->isOpen())
+      $shard->init();
+
+    return $shard->getByDate($date);
   }
 
-  public function getByID($y, $m, $d, $i) {
+  public function getByID($id) {
     if($this->_mode != 'r')
       throw new Exception('This connection is write-only');
 
+    if(!preg_match('/^(\d{4})(\d{2})(\d{2})(\d+)$/', $id, $match))
+      throw new Exception('Invalid ID');
+
+    $shard = $this->getShard($match[1],$match[2],$match[3]);
+
+    if(!$shard->exists())
+      return null;
+
+    if(!$shard->isOpen())
+      $shard->init();
+
+    return $shard->getLine($match[4]);
   }
 
   public function getShard($y, $m, $d) {

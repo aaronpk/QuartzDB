@@ -100,6 +100,26 @@ class Shard implements \Iterator {
     $this->_fp->fwrite($newline.$line);
   }
 
+  public function getLine($line) {
+    $this->_fp->seek($line);
+    return $this->current();
+  }
+
+  public function getByDate(DateTime $date) {
+    $this->rewind();
+    do {
+      $this->_fp->next();
+      $line = $this->_current = $this->_fp->current();
+      $curdate = substr($line, 0, 26);
+      $curdate = new DateTime($curdate);
+    } while($this->_fp->valid() && !self::date_eq($date, $curdate));
+
+    if(self::date_eq($date, $curdate))
+      return $this->current();
+    else
+      return null;
+  }
+
   public function sort() {
     // Re-sort all the records in this file by date. Line numbers will change so
     // the data will need to be re-indexed as well.
