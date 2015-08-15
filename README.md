@@ -49,6 +49,16 @@ foreach($results as $id=>$record) {
 }
 ```
 
+Last n records
+
+```php
+$results = $db->queryLast(10);
+foreach($results as $id=>$record) {
+  echo $id . ": " . $record->property . "\n";
+}
+```
+
+
 Single Record
 
 ```php
@@ -94,6 +104,10 @@ the date with microsecond precision, followed by a space, followed by the JSON r
 
 The ".meta" files are for storing information about the data file. Currently the only
 thing in the meta file is line 1 contains the number of lines in the data file.
+
+There is also a file in the root of the data folder containing the date of the last
+date seen. This is for quickly retrieving the last n records in the database without
+having to search the filesystem for all files.
 
 
 Indexes

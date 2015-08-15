@@ -1,7 +1,7 @@
 <?php
 namespace Quartz;
 
-use SplFileObject, DateTime;
+use SplFileObject, DateTime, DateTimeZone;
 
 class Shard implements \Iterator {
 
@@ -17,6 +17,7 @@ class Shard implements \Iterator {
   private $_y;
   private $_m;
   private $_d;
+  private $_date;
 
   private $_queryFrom;
   private $_queryTo;
@@ -35,6 +36,8 @@ class Shard implements \Iterator {
     $this->_y = $y;
     $this->_m = $m;
     $this->_d = $d;
+
+    $this->_date = new DateTime("$y-$m-$d", new DateTimeZone('UTC'));
   }
 
   public function exists() {
@@ -52,6 +55,18 @@ class Shard implements \Iterator {
       touch($this->_filename);
       touch($this->_metaFilename);
       $this->_fileWasJustCreated = true;
+      // If this shard is a later date than the last known shard, update that file
+      if(file_exists($this->_db->lastShardFile())) {
+        $last = new DateTime(file_get_contents($this->_db->lastShardFile()), new DateTimeZone('UTC'));
+        if($this->_date > $last) {
+          $updateLastShard = $this->_date;
+        }
+      } else {
+        $updateLastShard = $this->_date;
+      }
+      if($updateLastShard) {
+        file_put_contents($this->_db->lastShardFile(), $updateLastShard->format('Y-m-d'));
+      }
     }
 
     // open the file pointer
@@ -128,7 +143,7 @@ class Shard implements \Iterator {
       $this->_fp->next();
       $line = $this->_current = $this->_fp->current();
       $curdate = substr($line, 0, 26);
-      $curdate = new DateTime($curdate);
+      $curdate = new DateTime($curdate, new DateTimeZone('UTC'));
     } while($this->_fp->valid() && !self::date_eq($date, $curdate));
 
     if(self::date_eq($date, $curdate))
@@ -142,8 +157,8 @@ class Shard implements \Iterator {
     // the data will need to be re-indexed as well.
     $lines = file($this->_filename, FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
     usort($lines, function($a, $b){
-      $dateA = new DateTime(substr($a, 0, 26));
-      $dateB = new DateTime(substr($b, 0, 26));
+      $dateA = new DateTime(substr($a, 0, 26), new DateTimeZone('UTC'));
+      $dateB = new DateTime(substr($b, 0, 26), new DateTimeZone('UTC'));
       return !self::date_cmp($dateA, $dateB);
     });
     file_put_contents($this->_filename, implode("\n", $lines));
@@ -181,7 +196,7 @@ class Shard implements \Iterator {
       // Check if the current line is within the range of the query
       $line = $this->_current = $this->_fp->current();
       $date = substr($line, 0, 26);
-      $date = new DateTime($date);
+      $date = new DateTime($date, new DateTimeZone('UTC'));
 
       if($this->_queryFrom
         && self::date_cmp($date, $this->_queryFrom)) {
@@ -190,7 +205,7 @@ class Shard implements \Iterator {
           $this->_fp->next();
           $line = $this->_current = $this->_fp->current();
           $date = substr($line, 0, 26);
-          $date = new DateTime($date);
+          $date = new DateTime($date, new DateTimeZone('UTC'));
         } while($this->_fp->valid() && self::date_cmp($date, $this->_queryFrom));
       }
 
