@@ -9,6 +9,7 @@ When should I use this?
 Some great uses for QuartzDB:
 
 * Storing GPS logs (just store your records as GeoJSON!)
+* Storing chat logs from IRC, Slack, SMS or iMessage, etc
 * Storing sensor logs from IoT devices, such as in-house environment sensors
 
 
