@@ -8,7 +8,7 @@
       "website": "http://aaronparecki.com/"
     }
   ],
-  "require": {
+  "autoload": {
     "psr-0": {
       "Quartz": "src/"
     }    
