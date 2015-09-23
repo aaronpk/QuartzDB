@@ -152,3 +152,10 @@ $shard->reindex();
 $shard->save();
 ```
 
+License
+-------
+
+Copyright 2015 by Aaron Parecki
+
+QuartzDB is licensed under the [Apache 2.0 license](http://opensource.org/licenses/Apache-2.0)
+
