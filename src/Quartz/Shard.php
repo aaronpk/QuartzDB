@@ -68,6 +68,8 @@ class Shard implements \Iterator {
         $last = new DateTime(file_get_contents($this->_db->lastShardFile()), new DateTimeZone('UTC'));
         if($this->_date > $last) {
           $updateLastShard = $this->_date;
+        } else {
+          $updateLastShard = false;
         }
       } else {
         $updateLastShard = $this->_date;
