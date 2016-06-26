@@ -36,6 +36,12 @@ class DB {
     return $this->_path . '/lastshard.txt';
   }
 
+  public function close() {
+    foreach($this->_shards as $shard) {
+      $shard->close();
+    }
+  }
+
   public function add($date, $data) {
     if($this->_mode != 'w')
       throw new Exception('This connection is read-only');
