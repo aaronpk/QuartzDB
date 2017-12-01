@@ -131,7 +131,7 @@ class Shard implements \Iterator {
 
     // format the line
     $line = $date->format('Y-m-d H:i:s.').$date->format('u');
-    $line .= ' ' . json_encode($data);
+    $line .= ' ' . json_encode($data, JSON_UNESCAPED_SLASHES);
 
     if($this->_fileWasJustCreated) {
       $this->_fileWasJustCreated = false;
