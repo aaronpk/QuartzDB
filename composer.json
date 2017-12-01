@@ -5,7 +5,7 @@
   "authors": [
     {
       "name": "Aaron Parecki",
-      "website": "http://aaronparecki.com/"
+      "homepage": "http://aaronparecki.com/"
     }
   ],
   "autoload": {

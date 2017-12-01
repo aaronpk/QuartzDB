@@ -135,13 +135,10 @@ class Shard implements \Iterator {
 
     if($this->_fileWasJustCreated) {
       $this->_fileWasJustCreated = false;
-      $newline = '';
-    } else {
-      $newline = "\n";
     }
 
     // append the line to the file
-    $this->_fp->fwrite($newline.$line);
+    $this->_fp->fwrite($line."\n");
 
     // update the meta file
     $this->_mp->seek(0);
@@ -217,6 +214,7 @@ class Shard implements \Iterator {
   }
 
   public function valid() {
+
     if($this->_queryFrom || $this->_queryTo) {
       // Check if the current line is within the range of the query
       $line = $this->_current = $this->_fp->current();
@@ -242,6 +240,12 @@ class Shard implements \Iterator {
       return $this->_fp->valid();
     } elseif($this->_queryFromLine) {
       $valid = $this->_fp->valid();
+      // Check that the last (empty) line hasn't been reached
+      if($valid) {
+        $line = $this->_current = $this->_fp->current();
+        if($line == '')
+          $valid = false;
+      }
       return $valid;
     } else {
       return $this->_fp->valid();

@@ -111,51 +111,10 @@ date seen. This is for quickly retrieving the last n records in the database wit
 having to search the filesystem for all files.
 
 
-Indexes
--------
-
-Indexes are not yet implemented. Currently considering whether to implement a file-based index
-similar to the mechanism of storing the raw data, or whether to defer to a real
-database to handle the indexes.
-
-For example, using ElasticSearch, SQLite, Postgres, or MySQL to store the indexes 
-means being able to leverage a lot of existing work when searching and maintaining these
-indexes. 
-
-If indexes do end up being implemented here, they will probably work like this:
-
-Indexes would be stored as files on disk
-
-```
-/index/
-     /index_name/2015/07.txt
-     /index_name/2015/08.txt
-```
-
-The file would contain pointers to the file and line number of each record matching
-the index.
-
-```
-{
-  "property": {
-    "value1": ["2015/08/05/291","YYYY/MM/DD/line"],
-    "value2": ["2015/08/05/292","YYYY/MM/DD/line"],
-  }
-}
-```
-
-To update the indexes for all entries this shard:
-
-```
-$shard = $db->getShard("YYYY","MM","DD");
-$shard->reindex();
-$shard->save();
-```
-
 License
 -------
 
-Copyright 2015 by Aaron Parecki
+Copyright 2015-2017 by Aaron Parecki
 
 QuartzDB is licensed under the [Apache 2.0 license](http://opensource.org/licenses/Apache-2.0)
 

@@ -19,7 +19,7 @@ class DBWriteTest extends PHPUnit_Framework_TestCase {
     $this->assertEquals(1, $line);
 
     // Check that the data file has the right contents
-    $this->assertEquals('2015-07-07 09:00:00.000001 {"line":1}', file_get_contents(self::$dir.'/2015/07/07.txt'));
+    $this->assertEquals('2015-07-07 09:00:00.000001 {"line":1}'."\n", file_get_contents(self::$dir.'/2015/07/07.txt'));
 
     // Check that the meta file has the right contents
     $this->assertEquals('1', trim(file_get_contents(self::$dir.'/2015/07/07.meta')));
