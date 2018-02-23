@@ -1,7 +1,7 @@
 {
   "name": "p3k/quartz-db",
   "description": "A flat-file database optimized to hold time-series data.",
-  "license": "Apache 2.0",
+  "license": "Apache-2.0",
   "authors": [
     {
       "name": "Aaron Parecki",
