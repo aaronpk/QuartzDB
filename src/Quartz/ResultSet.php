@@ -96,6 +96,7 @@ class ResultSet implements \Iterator {
       return $currentValid;
     } else {
       // Check the next shard
+      $this->currentShard()->close();
       $this->_shardIndex++;
       if($this->currentShard()) {
         $this->currentShard()->init();
