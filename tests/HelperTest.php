@@ -1,10 +1,10 @@
 <?php
 
-class HelperTest extends PHPUnit_Framework_TestCase {
+class HelperTest extends \PHPUnit\Framework\TestCase {
 
   use Quartz\Helpers;
 
-  public function setUp() {
+  public function setUp(): void {
     date_default_timezone_set('UTC');
   }
 

@@ -1,11 +1,11 @@
 <?php
 
-class DBReadTest extends PHPUnit_Framework_TestCase {
+class DBReadTest extends \PHPUnit\Framework\TestCase {
 
   private static $dir = 'test-database';
   private $w;
 
-  public function setUp() {
+  public function setUp(): void {
     shell_exec('rm -rf '.self::$dir);
     mkdir(self::$dir);
     $this->w = new Quartz\DB(self::$dir, 'w');
