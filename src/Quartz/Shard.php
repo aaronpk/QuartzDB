@@ -196,7 +196,7 @@ class Shard implements \Iterator {
       $line = $this->_fp->current();
 
     if($line == '')
-      throw new Exception("Line was empty");
+      return null; //throw new Exception("Line was empty in ".$this->_filename);
       
     $date = substr($line, 0, 26);
     $data = substr($line, 27);
