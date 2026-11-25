@@ -64,6 +64,7 @@ class ResultSet implements \Iterator {
   ////////////////////////////////////////////////////////////
   // Iterator Interface
 
+  #[\ReturnTypeWillChange]
   public function current() {
     if(!$this->currentShard())
       return null;
@@ -71,6 +72,7 @@ class ResultSet implements \Iterator {
     return $this->currentShard()->current();
   }
 
+  #[\ReturnTypeWillChange]
   public function key() {
     if(!$this->currentShard())
       return null;
@@ -78,6 +80,7 @@ class ResultSet implements \Iterator {
     return $this->currentShard()->key();
   }
 
+  #[\ReturnTypeWillChange]
   public function next() {
     if(!$this->currentShard())
       return false;
@@ -87,6 +90,7 @@ class ResultSet implements \Iterator {
     return $this->currentShard()->next();
   }
 
+  #[\ReturnTypeWillChange]
   public function valid() {
     if(!$this->currentShard())
       return false;
@@ -108,6 +112,7 @@ class ResultSet implements \Iterator {
     }
   }
 
+  #[\ReturnTypeWillChange]
   public function rewind() {
     $this->_shardIndex = 0;
     if($this->currentShard()) {

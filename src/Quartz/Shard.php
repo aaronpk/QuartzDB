@@ -189,13 +189,14 @@ class Shard implements \Iterator {
 
   private $_current;
 
+  #[\ReturnTypeWillChange]
   public function current() {
     if($this->_current)
       $line = $this->_current;
     else
       $line = $this->_fp->current();
 
-    if($line == '')
+    if(trim($line) == '')
       return null; //throw new Exception("Line was empty in ".$this->_filename);
       
     $date = substr($line, 0, 26);
@@ -204,32 +205,37 @@ class Shard implements \Iterator {
     return Record::createFromLine($this->key(), $date, $data);
   }
 
+  #[\ReturnTypeWillChange]
   public function key() {
     $line = $this->_fp->key();
     return $this->_y.$this->_m.$this->_d.$line;
   }
 
+  #[\ReturnTypeWillChange]
   public function next() {
     return $this->_fp->next();
   }
 
+  #[\ReturnTypeWillChange]
   public function valid() {
 
     if($this->_queryFrom || $this->_queryTo) {
       // Check if the current line is within the range of the query
+      if(!$this->skipEmptyLines())
+        return false;
       $line = $this->_current = $this->_fp->current();
-      $date = substr($line, 0, 26);
-      $date = new DateTime($date, new DateTimeZone('UTC'));
+      $date = self::lineDate($line);
 
       if($this->_queryFrom
         && self::date_cmp($date, $this->_queryFrom)) {
         // Seek to the first line that is within the range
         do {
           $this->_fp->next();
+          if(!$this->skipEmptyLines())
+            return false;
           $line = $this->_current = $this->_fp->current();
-          $date = substr($line, 0, 26);
-          $date = new DateTime($date, new DateTimeZone('UTC'));
-        } while($this->_fp->valid() && self::date_cmp($date, $this->_queryFrom));
+          $date = self::lineDate($line);
+        } while(self::date_cmp($date, $this->_queryFrom));
       }
 
       if($this->_queryTo
@@ -248,19 +254,41 @@ class Shard implements \Iterator {
       }
       return $valid;
     } else {
-      return $this->_fp->valid();
+      return $this->skipEmptyLines();
     }
   }
 
+  // Blank lines can be left behind by an interrupted write, and the line after
+  // the final newline is blank too. new DateTime('') throws as of PHP 8.3, and
+  // before that it silently meant "now", so step over them instead.
+  // Returns whether a line is available. That has to be checked before reading
+  // the line: reading the last line of a file that doesn't end with a newline
+  // reaches EOF, after which SplFileObject::valid() is false.
+  private function skipEmptyLines() {
+    while($this->_fp->valid()) {
+      if(trim($this->_fp->current()) !== '')
+        return true;
+      $this->_fp->next();
+    }
+    return false;
+  }
+
+  private static function lineDate($line) {
+    return new DateTime(substr($line, 0, 26), new DateTimeZone('UTC'));
+  }
+
+  #[\ReturnTypeWillChange]
   public function rewind() {
     if($this->_queryFromLine) {
       // If querying starting with a line number, rewind should skip to that line.
+      // Step forward line by line. seek() lands on a different line before and
+      // after PHP 8.0.1, and next() only advances once the current line has
+      // been read, so read each line before moving past it.
       $this->_fp->rewind();
-      // Because the last line doesn't have a newline, we actually have to seek
-      // to the line prior to the one we want, then run next, which sets up the 
-      // internal pointer properly so that valid() works.
-      $this->_fp->seek($this->_queryFromLine-1);
-      $this->_fp->next();
+      for($i = 0; $i < $this->_queryFromLine && $this->_fp->valid(); $i++) {
+        $this->_fp->current();
+        $this->_fp->next();
+      }
     } else {
       return $this->_fp->rewind();
     }

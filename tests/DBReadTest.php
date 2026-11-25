@@ -31,6 +31,66 @@ class DBReadTest extends \PHPUnit\Framework\TestCase {
     $this->assertEquals(3, $num);
   }
 
+  // A blank line in the middle of a shard (e.g. from an interrupted write)
+  // must be skipped, not end the query early or throw
+  private function writeShardWithBlankLine() {
+    for($i=1; $i<4; $i++) {
+      $this->w->add(new DateTime('2015-08-07 09:00:0'.$i.' -0000'), ['line' => $i]);
+    }
+    $file = self::$dir.'/2015/08/07.txt';
+    $lines = file($file, FILE_IGNORE_NEW_LINES);
+    array_splice($lines, 1, 0, ['']);
+    file_put_contents($file, implode("\n", $lines)."\n");
+  }
+
+  public function testRangeQuerySkipsBlankLines() {
+    $this->writeShardWithBlankLine();
+    $db = new Quartz\DB(self::$dir, 'r');
+    $seen = [];
+    foreach($db->queryRange('2015-08-07T09:00:00', '2015-08-07T23:59:59') as $r) {
+      $seen[] = $r->data->line;
+    }
+    $this->assertEquals([1, 2, 3], $seen);
+  }
+
+  public function testRangeQueryStartingAfterBlankLine() {
+    $this->writeShardWithBlankLine();
+    $db = new Quartz\DB(self::$dir, 'r');
+    $seen = [];
+    foreach($db->queryRange('2015-08-07T09:00:02', '2015-08-07T09:00:03') as $r) {
+      $seen[] = $r->data->line;
+    }
+    $this->assertEquals([2], $seen);
+  }
+
+  public function testIteratingAShardSkipsBlankLines() {
+    $this->writeShardWithBlankLine();
+    $db = new Quartz\DB(self::$dir, 'r');
+    $shard = $db->shardForDate(new DateTime('2015-08-07'));
+    $shard->init();
+    $seen = [];
+    foreach($shard as $r) {
+      $seen[] = $r->data->line;
+    }
+    $this->assertEquals([1, 2, 3], $seen);
+  }
+
+  public function testIteratingAShardIncludesAnUnterminatedLastLine() {
+    for($i=1; $i<4; $i++) {
+      $this->w->add(new DateTime('2015-08-07 09:00:0'.$i.' -0000'), ['line' => $i]);
+    }
+    $file = self::$dir.'/2015/08/07.txt';
+    file_put_contents($file, rtrim(file_get_contents($file), "\n"));
+    $db = new Quartz\DB(self::$dir, 'r');
+    $shard = $db->shardForDate(new DateTime('2015-08-07'));
+    $shard->init();
+    $seen = [];
+    foreach($shard as $r) {
+      $seen[] = $r->data->line;
+    }
+    $this->assertEquals([1, 2, 3], $seen);
+  }
+
   public function testReadLatestRecordsFromMany() {
     for($i=1; $i<10; $i++) {
       $data = ['line' => $i];
