@@ -1,7 +1,7 @@
 <?php
 namespace Quartz;
 
-use SplFileObject, DateTime, DateTimeZone;
+use DateTime, DateTimeZone;
 
 class Shard implements \Iterator {
 
@@ -22,7 +22,16 @@ class Shard implements \Iterator {
   private $_queryFrom;
   private $_queryTo;
   private $_queryFromLine;
-  private $_pos;
+
+  // The data file is read with plain fgets() and the line number is counted
+  // here. SplFileObject's seek(), key() and next() have behaved differently
+  // from one PHP version to the next (php/php-src#8561).
+  // Zero-based number of the current line
+  private $_line = 0;
+  // The current line without its line ending. null: not read yet, false: end of file
+  private $_buf = null;
+  // Whether the current line is blank, or the end of the file was reached
+  private $_blank = true;
 
   use Helpers;
 
@@ -80,16 +89,32 @@ class Shard implements \Iterator {
     }
 
     // open the file pointer
-    if($this->exists()) {      
-      // Set the fopen mode to read or write
-      $mode = ($this->_db->mode == 'w' ? 'a' : 'r');
-      $file = new SplFileObject($this->_filename);
-      $this->_fp = $file->openFile($mode);
-      $meta = new SplFileObject($this->_metaFilename);
-      $this->_mp = $meta->openFile('r+');
-      if($this->_fileWasJustCreated) {
-        $this->_mp->fwrite("0\n");
+    if($this->exists()) {
+      $this->close();
+      if($this->_db->mode == 'w') {
+        // A last line that was cut off mid-write has no line ending. Finish it,
+        // so the next record doesn't get appended to the same line.
+        $existing = fopen($this->_filename, 'r');
+        if(fstat($existing)['size'] > 0) {
+          fseek($existing, -1, SEEK_END);
+          $missingNewline = fgetc($existing) !== "\n";
+        } else {
+          $missingNewline = false;
+        }
+        fclose($existing);
+        $this->_fp = fopen($this->_filename, 'a');
+        if($missingNewline)
+          fwrite($this->_fp, "\n");
+        $this->_mp = fopen($this->_metaFilename, 'r+');
+        if($this->_fileWasJustCreated) {
+          fwrite($this->_mp, "0\n");
+        }
+      } else {
+        $this->_fp = fopen($this->_filename, 'r');
+        $this->_mp = fopen($this->_metaFilename, 'r');
       }
+      $this->_line = 0;
+      $this->_buf = null;
     }
   }
 
@@ -98,13 +123,21 @@ class Shard implements \Iterator {
   }
 
   public function close() {
+    if(is_resource($this->_fp))
+      fclose($this->_fp);
+    if(is_resource($this->_mp))
+      fclose($this->_mp);
     $this->_fp = null;
+    $this->_mp = null;
+  }
+
+  public function __destruct() {
+    $this->close();
   }
 
   public function count() {
-    $cur = $this->_mp->rewind();
-    $lines = $this->_mp->current();
-    return (int)$lines;
+    rewind($this->_mp);
+    return (int)fgets($this->_mp);
   }
 
   public function setQueryRange($from, $to) {
@@ -138,37 +171,33 @@ class Shard implements \Iterator {
     }
 
     // append the line to the file
-    $this->_fp->fwrite($line."\n");
+    fwrite($this->_fp, $line."\n");
 
     // update the meta file
-    $this->_mp->seek(0);
     // TODO: cache the current value to avoid needing to read it each time
-    $cur = (int)trim($this->_mp->current());
-    $this->_mp->seek(0);
-    $newcount = ($cur+1);
-    $this->_mp->fwrite($newcount."\n");
-    $this->_mp->fflush();
+    $newcount = $this->count() + 1;
+    rewind($this->_mp);
+    fwrite($this->_mp, $newcount."\n");
+    fflush($this->_mp);
     return $newcount;
   }
 
+  // Returns the record on the given zero-based line, or null if that line is
+  // blank or past the end of the file
   public function getLine($line) {
-    $this->_fp->seek($line);
+    $this->seekLine((int)$line);
     return $this->current();
   }
 
+  // Returns the first record with exactly this date, or null
   public function getByDate(DateTime $date) {
     $this->rewind();
-    do {
-      $this->_fp->next();
-      $line = $this->_current = $this->_fp->current();
-      $curdate = substr($line, 0, 26);
-      $curdate = new DateTime($curdate, new DateTimeZone('UTC'));
-    } while($this->_fp->valid() && !self::date_eq($date, $curdate));
-
-    if(self::date_eq($date, $curdate))
-      return $this->current();
-    else
-      return null;
+    while($this->skipEmptyLines()) {
+      if(self::date_eq($date, self::lineDate($this->_buf)))
+        return $this->current();
+      $this->advance();
+    }
+    return null;
   }
 
   public function sort() {
@@ -184,113 +213,119 @@ class Shard implements \Iterator {
   }
 
   ////////////////////////////////////////////////////////////
-  // Iterator Interface
-  // Mostly pass-through to the SplFileObject
+  // Reading lines
 
-  private $_current;
-
-  #[\ReturnTypeWillChange]
-  public function current() {
-    if($this->_current)
-      $line = $this->_current;
-    else
-      $line = $this->_fp->current();
-
-    if(trim($line) == '')
-      return null; //throw new Exception("Line was empty in ".$this->_filename);
-      
-    $date = substr($line, 0, 26);
-    $data = substr($line, 27);
-
-    return Record::createFromLine($this->key(), $date, $data);
+  // Reads the current line if it hasn't been read yet.
+  // Returns false at the end of the file.
+  private function load() {
+    if($this->_buf === null) {
+      $line = fgets($this->_fp);
+      if($line === false) {
+        $this->_buf = false;
+        $this->_blank = true;
+      } else {
+        $this->_buf = rtrim($line, "\r\n");
+        $this->_blank = (trim($this->_buf) === '');
+      }
+    }
+    return $this->_buf !== false;
   }
 
-  #[\ReturnTypeWillChange]
-  public function key() {
-    $line = $this->_fp->key();
-    return $this->_y.$this->_m.$this->_d.$line;
-  }
-
-  #[\ReturnTypeWillChange]
-  public function next() {
-    return $this->_fp->next();
-  }
-
-  #[\ReturnTypeWillChange]
-  public function valid() {
-
-    if($this->_queryFrom || $this->_queryTo) {
-      // Check if the current line is within the range of the query
-      if(!$this->skipEmptyLines())
-        return false;
-      $line = $this->_current = $this->_fp->current();
-      $date = self::lineDate($line);
-
-      if($this->_queryFrom
-        && self::date_cmp($date, $this->_queryFrom)) {
-        // Seek to the first line that is within the range
-        do {
-          $this->_fp->next();
-          if(!$this->skipEmptyLines())
-            return false;
-          $line = $this->_current = $this->_fp->current();
-          $date = self::lineDate($line);
-        } while(self::date_cmp($date, $this->_queryFrom));
-      }
-
-      if($this->_queryTo
-        && !self::date_cmp($date, $this->_queryTo)) {
-        return false;
-      }
-
-      return $this->_fp->valid();
-    } elseif($this->_queryFromLine) {
-      $valid = $this->_fp->valid();
-      // Check that the last (empty) line hasn't been reached
-      if($valid) {
-        $line = $this->_current = $this->_fp->current();
-        if($line == '')
-          $valid = false;
-      }
-      return $valid;
-    } else {
-      return $this->skipEmptyLines();
+  // Moves to the next line. Stays put at the end of the file.
+  private function advance() {
+    if($this->load()) {
+      $this->_line++;
+      $this->_buf = null;
     }
   }
 
-  // Blank lines can be left behind by an interrupted write, and the line after
-  // the final newline is blank too. new DateTime('') throws as of PHP 8.3, and
-  // before that it silently meant "now", so step over them instead.
-  // Returns whether a line is available. That has to be checked before reading
-  // the line: reading the last line of a file that doesn't end with a newline
-  // reaches EOF, after which SplFileObject::valid() is false.
+  // Blank lines can be left behind by an interrupted write. Step over them.
+  // Returns whether a line with content is available.
   private function skipEmptyLines() {
-    while($this->_fp->valid()) {
-      if(trim($this->_fp->current()) !== '')
+    while($this->_buf !== null || $this->load()) {
+      if(!$this->_blank)
         return true;
-      $this->_fp->next();
+      if($this->_buf === false)
+        return false;
+      $this->_line++;
+      $this->_buf = null;
     }
     return false;
+  }
+
+  // Moves to the given zero-based line, or to the end of the file if there
+  // are fewer lines
+  private function seekLine($line) {
+    rewind($this->_fp);
+    $this->_line = 0;
+    $this->_buf = null;
+    while($this->_line < $line && $this->load()) {
+      $this->advance();
+    }
   }
 
   private static function lineDate($line) {
     return new DateTime(substr($line, 0, 26), new DateTimeZone('UTC'));
   }
 
+  ////////////////////////////////////////////////////////////
+  // Iterator Interface
+
+  #[\ReturnTypeWillChange]
+  public function current() {
+    if($this->_buf === null)
+      $this->load();
+    if($this->_blank)
+      return null;
+
+    $date = substr($this->_buf, 0, 26);
+    $data = substr($this->_buf, 27);
+
+    return Record::createFromLine($this->key(), $date, $data);
+  }
+
+  // The record ID: the shard's date followed by the zero-based line number
+  #[\ReturnTypeWillChange]
+  public function key() {
+    return $this->_y.$this->_m.$this->_d.$this->_line;
+  }
+
+  #[\ReturnTypeWillChange]
+  public function next() {
+    if($this->_buf === null)
+      $this->load();
+    if($this->_buf !== false) {
+      $this->_line++;
+      $this->_buf = null;
+    }
+  }
+
+  #[\ReturnTypeWillChange]
+  public function valid() {
+    if(!$this->skipEmptyLines())
+      return false;
+
+    if($this->_queryFrom || $this->_queryTo) {
+      $date = self::lineDate($this->_buf);
+
+      // Move to the first line that is within the range
+      while($this->_queryFrom && self::date_cmp($date, $this->_queryFrom)) {
+        $this->advance();
+        if(!$this->skipEmptyLines())
+          return false;
+        $date = self::lineDate($this->_buf);
+      }
+
+      if($this->_queryTo && !self::date_cmp($date, $this->_queryTo))
+        return false;
+    }
+
+    return true;
+  }
+
+  // If querying starting with a line number, rewind skips to that line
   #[\ReturnTypeWillChange]
   public function rewind() {
-    if($this->_queryFromLine) {
-      // If querying starting with a line number, rewind should skip to that line.
-      // Step forward line by line. seek() lands on a different line before and
-      // after PHP 8.0.1, and next() only advances once the current line has
-      // been read, so read each line before moving past it.
-      $this->_fp->rewind();
-      for($i = 0; $i < $this->_queryFromLine && $this->_fp->valid(); $i++) {
-        $this->_fp->current();
-        $this->_fp->next();
-      }
-    } else {
-      return $this->_fp->rewind();
-    }
+    $this->seekLine($this->_queryFromLine ? $this->_queryFromLine : 0);
   }
 }
